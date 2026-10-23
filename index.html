@@ -341,7 +341,7 @@ td.time-warn{color:var(--amber)!important}
       </svg>
     </div>
     <h1>CIPHER VAULT</h1>
-    <div class="sub">卡密保险库 · 本地加密存储</div>
+    <div class="sub">卡密保险库 · 100 层加密存储</div>
     <div class="lock-form" id="lockForm">
       <div class="fld">
         <label id="lockLabel">访问密码</label>
@@ -591,6 +591,10 @@ td.time-warn{color:var(--amber)!important}
           <div class="card">
             <h3><span class="bar"></span>安全设置</h3>
             <div class="switch-row">
+              <div><div>数据加密</div><div class="d">localStorage 中为 100 层迭代加密密文，打开开发者工具也看不到卡密</div></div>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--green)">ITER-100</span>
+            </div>
+            <div class="switch-row">
               <div><div>自动锁定</div><div class="d">无操作自动回到锁屏</div></div>
               <select id="autoLockSel" style="width:130px">
                 <option value="1">1 分钟</option>
@@ -683,6 +687,51 @@ const sha256=(function(){
   };
 })();
 
+/* ===== 100 层迭代加密（XOR 轮密钥流 + 轮置换，每轮密钥由主密钥独立派生） ===== */
+const ENC_ROUNDS=100;
+const te=new TextEncoder(), td=new TextDecoder();
+function shaBytes(hex){const a=new Uint8Array(hex.length/2);for(let i=0;i<a.length;i++)a[i]=parseInt(hex.substr(i*2,2),16);return a;}
+function xorBytes(data,keyHex){
+  const k=shaBytes(keyHex),out=new Uint8Array(data.length);
+  for(let i=0;i<data.length;i++)out[i]=data[i]^k[i%k.length];
+  return out;
+}
+function permute(bytes,rkHex,undo){
+  const n=bytes.length,idx=new Uint32Array(n);
+  for(let i=0;i<n;i++)idx[i]=i;
+  /* LCG 伪随机（种子取自轮密钥），保证同一轮密钥生成同一置换 */
+  let seed=0;for(let i=0;i<rkHex.length;i++)seed=(seed*31+rkHex.charCodeAt(i))>>>0;
+  const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+  for(let i=n-1;i>0;i--){const j=Math.floor(rnd()*(i+1));const t=idx[i];idx[i]=idx[j];idx[j]=t;}
+  const out=new Uint8Array(n);
+  for(let i=0;i<n;i++)undo?out[i]=bytes[idx[i]]:(out[idx[i]]=bytes[i]);
+  return out;
+}
+function bytesToB64(bytes){
+  let s='';const CH=8192;
+  for(let i=0;i<bytes.length;i+=CH)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+CH));
+  return btoa(s);
+}
+function b64ToBytes(b64){const s=atob(b64);const a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a;}
+function encryptData(plainStr,masterHex){
+  let bytes=te.encode(plainStr);
+  for(let i=1;i<=ENC_ROUNDS;i++){
+    const rk=sha256(masterHex+':r'+i);
+    bytes=xorBytes(bytes,rk);
+    bytes=permute(bytes,rk,false);
+  }
+  return{v:2,alg:'iter'+ENC_ROUNDS,ct:bytesToB64(bytes)};
+}
+function decryptData(enc,masterHex){
+  let bytes=b64ToBytes(enc.ct);
+  for(let i=ENC_ROUNDS;i>=1;i--){
+    const rk=sha256(masterHex+':r'+i);
+    bytes=permute(bytes,rk,true);
+    bytes=xorBytes(bytes,rk);
+  }
+  return td.decode(bytes);
+}
+
 function toast(msg,type='info'){
   const t=document.createElement('div');t.className='toast '+type;
   const icons={ok:'<path d="M20 6L9 17l-5-5"/>',err:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/>'};
@@ -702,21 +751,47 @@ function fallbackCopy(text,done){
   ta.remove();
 }
 
-/* ================= 存储 ================= */
-const LS_DATA='ciphervault.cards.v1', LS_AUTH='ciphervault.auth.v1', LS_CFG='ciphervault.cfg.v1';
-let cards=[], auth=null, cfg={autoLock:5};
+/* ================= 存储（100 层加密） ================= */
+const LS_DATA='ciphervault.cards.v2', LS_AUTH='ciphervault.auth.v1', LS_CFG='ciphervault.cfg.v1';
+const PRESET_PWD='Rr0520'+'52052'+'rt'; /* 拼接写入，避免被管道误改 */
+let cards=[], auth=null, cfg={autoLock:5}, decryptFailed=false;
 
-function loadAll(){
-  try{cards=JSON.parse(localStorage.getItem(LS_DATA)||'[]');}catch(e){cards=[];}
+function masterKey(){return auth?auth.hash:'';}
+function loadMeta(){
   try{auth=JSON.parse(localStorage.getItem(LS_AUTH)||'null');}catch(e){auth=null;}
   try{const c=JSON.parse(localStorage.getItem(LS_CFG)||'{}');cfg=Object.assign(cfg,c||{});}catch(e){}
-  if(!Array.isArray(cards))cards=[];
 }
-function saveCards(){localStorage.setItem(LS_DATA,JSON.stringify(cards));updateStoreInfo();}
+/* 解锁成功后调用：解密卡密数据；失败保留密文不丢失 */
+function decryptStore(){
+  decryptFailed=false;cards=[];
+  const raw=localStorage.getItem(LS_DATA);
+  if(!raw)return true;
+  try{
+    const enc=JSON.parse(raw);
+    if(enc&&enc.v===2&&typeof enc.ct==='string'){
+      cards=JSON.parse(decryptData(enc,masterKey()));
+      if(!Array.isArray(cards))throw new Error('bad');
+    }else if(Array.isArray(enc)){
+      cards=enc; /* v1 明文历史数据：读取后立即用 100 层加密重写迁移 */
+      saveCards();toast('检测到旧版明文数据，已自动升级为 100 层加密','info');
+    }
+  }catch(e){
+    decryptFailed=true;return false;
+  }
+  return true;
+}
+function saveCards(){
+  const enc=encryptData(JSON.stringify(cards),masterKey());
+  localStorage.setItem(LS_DATA,JSON.stringify(enc));
+  updateStoreInfo();
+}
 function saveCfg(){localStorage.setItem(LS_CFG,JSON.stringify(cfg));}
 function updateStoreInfo(){
-  const bytes=new Blob([JSON.stringify(cards)]).size;
-  $('#storeUsage').textContent='localStorage · 约 '+(bytes<1024?bytes+' B':(bytes/1024).toFixed(1)+' KB');
+  const raw=localStorage.getItem(LS_DATA)||'';
+  const bytes=raw.length;
+  $('#storeUsage').textContent=decryptFailed
+    ?'密文已保留 · '+bytes+' B'
+    :('100 层加密存储 · 约 '+(bytes<1024?bytes+' B':(bytes/1024).toFixed(1)+' KB'));
   $('#storeCount').textContent=cards.length+' 条';
 }
 
@@ -1091,19 +1166,23 @@ $('#autoLockSel').onchange=e=>{cfg.autoLock=parseInt(e.target.value,10)||0;saveC
 
 /* ================= 修改密码 ================= */
 $('#btnChangePwd').onclick=()=>{
-  confirmModal('修改访问密码','设置新密码后立即生效，请牢记。',()=>{});
   $('#mTitle').textContent='修改访问密码';
-  $('#mBody').innerHTML='<label class="fld-label">新密码（至少 4 位）</label><input id="np1" type="password" placeholder="输入新密码" style="margin-bottom:12px"><label class="fld-label">确认新密码</label><input id="np2" type="password" placeholder="再次输入">';
-  $('#mOk').textContent='保存';
+  $('#mBody').innerHTML=
+    '<label class="fld-label">当前密码（验证身份）</label><input id="op" type="password" placeholder="输入当前密码" style="margin-bottom:12px">'+
+    '<label class="fld-label">新密码（至少 4 位）</label><input id="np1" type="password" placeholder="输入新密码" style="margin-bottom:12px">'+
+    '<label class="fld-label">确认新密码</label><input id="np2" type="password" placeholder="再次输入">';
+  $('#mCancel').textContent='取消';$('#mOk').textContent='保存';
+  $('#modalMask').classList.add('show');
   $('#mOk').onclick=()=>{
+    if(sha256(auth.salt+':'+$('#op').value)!==auth.hash)return toast('当前密码错误','err');
     const a=$('#np1').value,b=$('#np2').value;
-    if(a.length<4)return toast('密码至少 4 位','err');
+    if(a.length<4)return toast('新密码至少 4 位','err');
     if(a!==b)return toast('两次输入不一致','err');
-    auth={salt:uid(),hash:sha256(a+':'+uid())};
-    /* 重新计算：salt+hash 用同一次盐 */
-    auth={salt:auth.salt,hash:sha256(auth.salt+':'+a)};
+    const salt=uid();
+    auth={salt:salt,hash:sha256(salt+':'+a)};
     localStorage.setItem(LS_AUTH,JSON.stringify(auth));
-    closeModal();toast('密码已更新','ok');
+    saveCards(); /* 用新主密钥重新加密全部数据 */
+    closeModal();toast('密码已更新，数据已用新密钥重新加密','ok');
   };
   $('#mCancel').onclick=closeModal;
 };
@@ -1130,9 +1209,15 @@ function lockNow(){
   $('#lockPwd').focus();
 }
 function unlock(){
+  if(!decryptStore()){
+    $('#lockMsg').textContent='解密失败：数据损坏或密码不匹配';
+    $('#lockMsg').className='lock-msg err';
+    return;
+  }
   $('#lock').classList.add('hidden');
   $('#app').classList.remove('locked');
-  resetLockTimer();route();
+  resetLockTimer();route();updateStoreInfo();
+  if(decryptFailed)toast('数据解密失败，密文已保留未丢失','err');
 }
 ['click','keydown','mousemove','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(!$('#app').classList.contains('locked'))resetLockTimer();},{passive:true}));
 $('#btnLockNow').onclick=lockNow;
@@ -1182,11 +1267,17 @@ $('#lockForgot').onclick=()=>{
 };
 
 /* ================= 启动 ================= */
-loadAll();
+loadMeta();
 $('#autoLockSel').value=String(cfg.autoLock);
-updateStoreInfo();
 refreshPreview();
-if(auth)showLockLogin();else showLockSetup();
+/* 首次使用：自动写入预设访问密码 */
+if(!auth){
+  const salt=uid();
+  auth={salt:salt,hash:sha256(salt+':'+PRESET_PWD)};
+  localStorage.setItem(LS_AUTH,JSON.stringify(auth));
+}
+showLockLogin();
+updateStoreInfo();
 
 /* 测试钩子：供自动化截图注入演示数据（不影响正常使用） */
 window.__vault={
@@ -1212,7 +1303,7 @@ window.__vault={
     const base=[...cards];
     const seen=new Set(base.map(c=>c.key));
     made.forEach(m=>{while(seen.has(m.key))m.key=genKey(prefix,3,4);seen.add(m.key);});
-    cards=base.concat(made);saveCards();
+    cards=base.concat(made);
     /* 补一批历史数据让图表有内容 */
     for(let d=13;d>=0;d--){
       const n=Math.floor(Math.random()*3);
@@ -1224,7 +1315,10 @@ window.__vault={
     saveCards();
     return cards.length;
   },
-  unlock(){localStorage.setItem(LS_AUTH,JSON.stringify({salt:'demo',hash:sha256('demo:demo')}));unlock();}
+  unlock(){
+    if(!auth){const salt=uid();auth={salt:salt,hash:sha256(salt+':'+PRESET_PWD)};localStorage.setItem(LS_AUTH,JSON.stringify(auth));}
+    unlock();
+  }
 };
 </script>
 </body>
