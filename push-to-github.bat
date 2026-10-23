@@ -1,91 +1,113 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 echo ============================================
-echo   CIPHER VAULT - ä¸€é”®æŽ¨é€åˆ° GitHub
+echo   CIPHER VAULT - Ò»¼üÍÆËÍµ½ GitHub
 echo ============================================
 echo.
 
 where git >nul 2>nul
 if errorlevel 1 (
-    echo [é”™è¯¯] æœªæ£€æµ‹åˆ° gitï¼Œè¯·å…ˆå®‰è£…: https://git-scm.com/download/win
+    echo [´íÎó] Î´¼ì²âµ½ git£¬ÇëÏÈ°²×°: https://git-scm.com/download/win
     pause
     exit /b 1
 )
 
+REM ---- È·±£ git Éí·ÝÅäÖÃ£¨ÏîÄ¿¼¶£¬²»¶¯È«¾Ö£© ----
+git config user.name >nul 2>nul
+if errorlevel 1 git config user.name "CIPHER VAULT"
+git config user.email >nul 2>nul
+if errorlevel 1 git config user.email "vault@local"
+
+REM ---- 1. ³õÊ¼»¯ + Ìá½» ----
 if not exist ".git" (
-    echo [1/4] åˆå§‹åŒ– git ä»“åº“...
-    git init
-    git config user.name "CIPHER VAULT"
-    git config user.email "vault@local"
-    git add .
-    git commit -m "CIPHER VAULT å¡å¯†ç®¡ç†ç³»ç»Ÿ"
+    echo [1/3] ³õÊ¼»¯ git ²Ö¿â...
+    git init -q
+    git branch -M main
 ) else (
-    echo [1/4] æ£€æµ‹åˆ°å·²æœ‰ git ä»“åº“ï¼Œæäº¤æœ€æ–°æ”¹åŠ¨...
-    git add .
-    git diff --cached --quiet || git commit -m "update"
+    echo [1/3] Ê¹ÓÃÒÑÓÐ git ²Ö¿â
+)
+git add -A
+git diff --cached --quiet >nul 2>nul
+if errorlevel 1 (
+    git commit -q -m "CIPHER VAULT card key manager"
+    echo       ÒÑÌá½»×îÐÂ¸Ä¶¯
+) else (
+    echo       Ã»ÓÐÐÂ¸Ä¶¯£¬Ìø¹ýÌá½»
 )
 
+REM ---- 2. ÊäÈë²Ö¿âµØÖ· ----
 echo.
-echo [2/4] è¯·è¾“å…¥ä½ çš„ GitHub ä»“åº“åœ°å€
-echo       æ ¼å¼å¦‚: https://github.com/ç”¨æˆ·å/ä»“åº“å.git
+echo [2/3] ÇëÊäÈëÄãµÄ GitHub ²Ö¿âµØÖ·
+echo       ¸ñÊ½: https://github.com/ÓÃ»§Ãû/²Ö¿âÃû.git
+echo       ÏÈÔÚ GitHub ÍøÒ³½¨ºÃ¿Õ²Ö¿â£¨²»Òª¹´Ñ¡³õÊ¼»¯ README£©
 echo.
-set /p REPO="ä»“åº“åœ°å€: "
-
-if "%REPO%"=="" (
-    echo [é”™è¯¯] æœªè¾“å…¥ä»“åº“åœ°å€
+set "REPO="
+set /p REPO="²Ö¿âµØÖ·: "
+if "!REPO!"=="" (
+    echo [´íÎó] Î´ÊäÈë²Ö¿âµØÖ·
     pause
     exit /b 1
 )
 
-echo.
-echo [3/4] å…³è”è¿œç¨‹ä»“åº“...
-git branch -M main
 git remote get-url origin >nul 2>nul
 if errorlevel 1 (
-    git remote add origin "%REPO%"
+    git remote add origin "!REPO!"
 ) else (
-    git remote set-url origin "%REPO%"
+    git remote set-url origin "!REPO!"
 )
 
+REM ---- 3. ÍÆËÍ ----
 echo.
-echo [4/4] æŽ¨é€ä¸­ï¼ˆé¦–æ¬¡æŽ¨é€è¯·åœ¨å¼¹å‡ºçš„çª—å£ç™»å½• GitHubï¼‰...
+echo [3/3] ÍÆËÍÖÐ... Ê×´ÎÍÆËÍ»áµ¯³ö GitHub µÇÂ¼´°¿Ú
+echo.
 git push -u origin main
 if errorlevel 1 (
     echo.
-    echo [é”™è¯¯] æŽ¨é€å¤±è´¥ã€‚å¸¸è§åŽŸå› :
-    echo   1. ä»“åº“åœ°å€å¡«é”™
-    echo   2. å¯†ç å¤„éœ€è¦å¡« Personal Access Token è€Œä¸æ˜¯ç™»å½•å¯†ç 
-    echo      GitHub - Settings - Developer settings - Tokens - ç”Ÿæˆå‹¾é€‰ repo æƒé™
-    echo   3. ä»“åº“å·²å­˜åœ¨æ–‡ä»¶ä¸”æœªå…è®¸è¦†ç›– - å¯å…ˆåŠ  --force æˆ–æ¸…ç©ºè¿œç«¯ä»“åº“
+    echo ============================================
+    echo   ÍÆËÍÊ§°Ü£¬ÅÅ²éÇåµ¥£º
+    echo ============================================
+    echo   1. ²Ö¿âµØÖ·Êä´í - È·ÈÏÊÇÄã×Ô¼ºµÄ²Ö¿â
+    echo   2. µÇÂ¼´°¿ÚÃÜÂë´¦ÒªÌî Personal Access Token
+    echo      £¨²»ÊÇÕËºÅÃÜÂë£¡£©
+    echo      GitHub - Settings - Developer settings -
+    echo      Tokens classic - Generate - ¹´Ñ¡ repo
+    echo   3. Ô¶¶Ë²Ö¿â·Ç¿Õ - ½¨²Ö¿âÊ±È¡Ïû¹´Ñ¡
+    echo      "Add a README file"
+    echo   4. ÍøÂç/´úÀíÎÊÌâ - ÉÔºóÖØÊÔ
+    echo ============================================
     pause
     exit /b 1
 )
 
 echo.
 echo ============================================
-echo   æŽ¨é€æˆåŠŸï¼
+echo   ÍÆËÍ³É¹¦£¡
 echo ============================================
 echo.
-echo æœ€åŽä¸€æ­¥ - å¼€å¯ GitHub Pages:
-echo   1. æ‰“å¼€ https://github.com/ä½ çš„ç”¨æˆ·å/ä»“åº“å/settings/pages
-echo   2. Source é€‰ Deploy from a branch
-echo   3. Branch é€‰ mainï¼Œç›®å½•é€‰ / (root)ï¼Œä¿å­˜
-echo   4. 1-2 åˆ†é’ŸåŽè®¿é—® https://ä½ çš„ç”¨æˆ·å.github.io/ä»“åº“å/
+echo ¿ªÆô GitHub Pages£¨¶þÑ¡Ò»£©£º
+echo.
+echo   ÊÖ¶¯·½Ê½£¨1 ·ÖÖÓ£©£º
+echo     1. ä¯ÀÀÆ÷´ò¿ªÄãµÄ²Ö¿âÒ³Ãæ
+echo     2. Settings - Pages
+echo     3. Source Ñ¡ Deploy from a branch
+echo     4. Branch Ñ¡ main£¬Folder Ñ¡ / root£¬Save
+echo     5. µÈ 1-2 ·ÖÖÓ£¬·ÃÎÊ
+echo        https://ÓÃ»§Ãû.github.io/²Ö¿âÃû/
 echo.
 
 where gh >nul 2>nul
 if not errorlevel 1 (
-    echo æ£€æµ‹åˆ° GitHub CLIï¼Œå°è¯•è‡ªåŠ¨å¼€å¯ Pages...
-    for /f "tokens=*" %%a in ('gh api user --jq ".login" 2^>nul') do set GHUSER=%%a
-    for /f "tokens=*" %%b in ('git remote get-url origin ^| sed "s/.*github.com[:^/]*\/\([^.]*\).*/\1/"') do set REPONAME=%%b
-    gh api "repos/!GHUSER!/!REPONAME!/pages" -X POST -f "source[branch]=main" -f "source[path]=/" >nul 2>nul
-    if not errorlevel 1 (
-        echo Pages å·²å¼€å¯ï¼ç¨åŽè®¿é—®: https://!GHUSER!.github.io/!REPONAME!/
-    ) else (
-        echo è‡ªåŠ¨å¼€å¯å¤±è´¥ï¼Œè¯·æŒ‰ä¸Šé¢æ‰‹åŠ¨æ­¥éª¤å¼€å¯ï¼ˆæˆ–ä»“åº“é‡Œå·²å¼€å¯ï¼‰
+    choice /c YN /m "¼ì²âµ½ GitHub CLI£¬ÊÇ·ñ×Ô¶¯¿ªÆô Pages"
+    if not errorlevel 2 (
+        gh api "repos/{owner}/{repo}/pages" -X POST -f "source[branch]=main" -f "source[path]=/" >nul 2>nul
+        if not errorlevel 1 (
+            echo.
+            for /f "tokens=*" %%u in ('gh api "repos/{owner}/{repo}/pages" --jq ".html_url" 2^>nul') do echo Pages ÒÑ¿ªÆô£¬ÍøÕ¾µØÖ·: %%u
+        ) else (
+            echo ×Ô¶¯¿ªÆôÊ§°Ü£¨¿ÉÄÜÒÑ¿ªÆô¹ý£©£¬ÇëÓÃÊÖ¶¯·½Ê½
+        )
     )
 )
 
