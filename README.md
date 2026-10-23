@@ -1,0 +1,99 @@
+# CIPHER VAULT · 卡密保险库
+
+单文件卡密管理系统：发布、撤回、有效期管理、验证。纯前端实现，零依赖，可直接部署到 GitHub Pages。
+
+## 功能
+
+| 模块 | 能力 |
+|---|---|
+| 仪表盘 | 总数 / 有效 / 已用 / 撤回 / 7天内到期统计，近14天发布量图表，最近发布动态 |
+| 卡密库 | 搜索、状态筛选、排序、分页、批量撤回、批量删除、单张编辑/删除 |
+| 发布卡密 | 自定义前缀 / 分段 / 每段长度 / 数量（1-500），三种有效期规则，实时预览 |
+| 验证器 | 本地校验卡密有效性，显示剩余天数、首用时间、备注，支持「首用后 N 天」自动标记 |
+| 数据管理 | JSON 备份 / CSV 导出 / JSON 导入合并、修改密码、自动锁定时长、清空数据 |
+
+### 三种有效期规则
+
+1. **永久有效** — 不设到期，除非手动撤回
+2. **截止日期** — 统一在指定日期前有效（当天 23:59:59 过期）
+3. **首用后 N 天** — 首次验证后 N 天内有效，验证器可自动标记首次使用时间
+
+### 安全设计
+
+- 首次使用设置访问密码（SHA-256 加盐哈希存储于本机）
+- 支持自动锁定（1/5/15/30 分钟）与手动锁定
+- 卡密默认掩码显示，点击复制图标才显示完整卡密
+- 数据仅存本机浏览器 localStorage，不上传任何服务器
+
+## 部署到 GitHub Pages（3 分钟）
+
+### 方式一：一键脚本（推荐，Windows）
+
+1. 在 GitHub 上创建一个空仓库（不要勾选初始化任何文件），复制仓库地址
+2. 双击运行 `push-to-github.bat`
+3. 按提示粘贴仓库地址（如 `https://github.com/你的用户名/cardkey-vault.git`）
+4. 脚本自动完成 git 初始化、提交、推送，并尝试用 `gh` 开启 Pages（没装 gh 会跳过）
+
+### 方式二：网页端手动操作
+
+```bash
+# 1. 在 cardkey-vault 目录下初始化并提交
+git init
+git add .
+git commit -m "CIPHER VAULT 卡密管理系统"
+
+# 2. 关联你的仓库并推送（替换成你的仓库地址）
+git branch -M main
+git remote add origin https://github.com/你的用户名/仓库名.git
+git push -u origin main
+```
+
+然后开启 Pages：
+
+1. 仓库页面 → **Settings** → **Pages**
+2. Source 选择 **Deploy from a branch**
+3. Branch 选 `main`，目录选 `/ (root)`，保存
+4. 等 1-2 分钟，访问 `https://你的用户名.github.io/仓库名/`
+
+> 推送时浏览器可能要求登录 GitHub 账号，密码处填 **Personal Access Token**（Settings → Developer settings → Tokens）。
+
+### 方式三：GitHub CLI（已装 gh 的话）
+
+```bash
+gh repo create cardkey-vault --public --source=. --push
+gh api repos/{owner}/cardkey-vault/pages -X POST -f source[branch]=main -f source[path]=/
+```
+
+## 日常使用
+
+1. 浏览器打开页面 → 首次设置访问密码（至少 4 位）
+2. 「发布卡密」→ 填参数 → 生成并发布
+3. 把卡密通过客服渠道发给客户
+4. 客户有问题 → 「验证器」输入卡密查状态
+5. 出纠纷 → 卡密库一键撤回
+6. **换电脑前务必「数据管理 → 导出 JSON 备份」**，到新设备导入恢复
+
+## 文件说明
+
+```
+cardkey-vault/
+├── index.html          # 完整应用（单文件，无外部依赖）
+├── README.md           # 本文档
+├── push-to-github.bat  # Windows 一键推送脚本
+├── tools/              # 自动化测试脚本（开发用，可删）
+│   ├── shot.js         # 截图验证
+│   └── test.js         # 25 项功能测试
+└── screenshots/        # 验证截图（开发用，可删）
+```
+
+## 注意事项
+
+- **localStorage 绑定域名 + 浏览器**：在 A 电脑发布的卡密，B 电脑打开同一网址看不到（数据在本地）。多设备同步靠导出/导入 JSON。
+- 清除浏览器数据会丢卡密记录，定期导出备份。
+- 验证器是本地校验，适合管理场景；若客户需要自助在线验证，需后续接入云数据库（当前架构的数据层已隔离，可扩展）。
+
+## 技术
+
+- 原生 HTML/CSS/JS，零依赖，零构建，file:// 直接打开也能用
+- 暗色科幻风 UI，响应式（桌面 + 手机底部导航）
+- 内置迷你 SHA-256 实现（不依赖 crypto.subtle，任何环境可用）

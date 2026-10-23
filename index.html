@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIPHER VAULT · 卡密保险库</title>
+<style>
+:root{
+  --bg:#070b12; --bg2:#0b1220; --panel:#0d1524; --panel2:#101a2e;
+  --line:rgba(56,189,248,.14); --line2:rgba(148,163,184,.12);
+  --cyan:#22d3ee; --cyan-dim:rgba(34,211,238,.12);
+  --gold:#e8b64c; --gold-dim:rgba(232,182,76,.12);
+  --text:#e2e8f0; --muted:#7d8ba0; --faint:#4a5568;
+  --green:#34d399; --red:#f87171; --amber:#fbbf24; --blue:#60a5fa;
+  --mono:'JetBrains Mono','Cascadia Code',Consolas,'Courier New',monospace;
+  --sans:'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 70% -10%, rgba(34,211,238,.07), transparent),
+    radial-gradient(ellipse 60% 40% at 10% 110%, rgba(232,182,76,.05), transparent),
+    linear-gradient(rgba(56,189,248,.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56,189,248,.028) 1px, transparent 1px);
+  background-size:100% 100%,100%100%,44px 44px,44px 44px;
+}
+::selection{background:rgba(34,211,238,.3)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#1e293b;border-radius:5px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#334155}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== 锁屏 ===== */
+#lock{
+  position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+  background:rgba(7,11,18,.92); backdrop-filter:blur(14px);
+}
+#lock.hidden{display:none}
+.lock-box{
+  width:min(400px,92vw); padding:44px 38px 36px; text-align:center;
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--line); border-radius:18px;
+  box-shadow:0 0 90px rgba(34,211,238,.09), 0 30px 60px rgba(0,0,0,.5);
+  position:relative; overflow:hidden;
+}
+.lock-box::before{
+  content:''; position:absolute; top:0; left:15%; right:15%; height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+}
+.lock-logo{margin-bottom:18px}
+.lock-box h1{font-size:19px; letter-spacing:.28em; font-weight:600}
+.lock-box .sub{color:var(--muted); font-size:12px; margin-top:8px; letter-spacing:.12em}
+.lock-form{margin-top:30px; display:flex; flex-direction:column; gap:13px}
+.lock-form .fld{text-align:left}
+.lock-form label{display:block; font-size:11px; color:var(--muted); letter-spacing:.15em; margin-bottom:7px}
+.lock-msg{font-size:12px; min-height:18px; text-align:left}
+.lock-msg.err{color:var(--red)} .lock-msg.ok{color:var(--green)}
+.lock-forgot{margin-top:20px; font-size:11px; color:var(--faint); cursor:pointer; text-decoration:underline}
+.lock-forgot:hover{color:var(--red)}
+
+/* ===== 主布局 ===== */
+#app{display:grid; grid-template-columns:226px 1fr; height:100vh; position:relative; z-index:1}
+#app.locked{filter:blur(3px) saturate(.6); pointer-events:none}
+
+/* 侧栏 */
+aside{
+  background:linear-gradient(180deg,rgba(13,21,36,.92),rgba(7,11,18,.92));
+  border-right:1px solid var(--line); display:flex; flex-direction:column;
+  padding:22px 14px 16px; backdrop-filter:blur(8px);
+}
+.brand{display:flex; align-items:center; gap:11px; padding:0 8px 20px; border-bottom:1px solid var(--line2)}
+.brand-name{font-size:14px; font-weight:700; letter-spacing:.22em}
+.brand-sub{font-size:9px; color:var(--cyan); letter-spacing:.34em; margin-top:3px}
+nav{flex:1; display:flex; flex-direction:column; gap:4px; margin-top:18px}
+.nav-item{
+  display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:10px;
+  color:var(--muted); cursor:pointer; font-size:13px; border:1px solid transparent;
+  transition:all .18s; user-select:none; position:relative;
+}
+.nav-item svg{width:17px;height:17px;flex:none}
+.nav-item:hover{color:var(--text); background:rgba(56,189,248,.06)}
+.nav-item.on{color:var(--cyan); background:var(--cyan-dim); border-color:var(--line)}
+.nav-item.on::before{
+  content:''; position:absolute; left:-14px; top:20%; bottom:20%; width:2.5px;
+  background:var(--cyan); border-radius:2px; box-shadow:0 0 8px var(--cyan);
+}
+.nav-badge{margin-left:auto; font-size:10px; font-family:var(--mono); color:var(--cyan);
+  background:var(--cyan-dim); padding:2px 7px; border-radius:20px; border:1px solid var(--line)}
+.aside-foot{border-top:1px solid var(--line2); padding-top:14px; display:flex; flex-direction:column; gap:8px}
+.lock-state{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); padding:0 6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 7px var(--green)}
+.dot.amber{background:var(--amber);box-shadow:0 0 7px var(--amber)}
+.btn-lock{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:9px;
+  background:transparent;border:1px solid var(--line2);border-radius:9px;color:var(--muted);
+  font-size:12px;cursor:pointer;transition:all .18s;font-family:var(--sans);
+}
+.btn-lock:hover{color:var(--red);border-color:rgba(248,113,113,.4)}
+.btn-lock svg{width:14px;height:14px}
+
+/* 主区 */
+main{display:flex;flex-direction:column;overflow:hidden}
+.topbar{
+  padding:20px 30px; border-bottom:1px solid var(--line2);
+  display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
+  background:rgba(7,11,18,.6); backdrop-filter:blur(6px);
+}
+.page-title{font-size:21px;font-weight:650;letter-spacing:.04em}
+.page-title .en{font-size:10px;color:var(--cyan);letter-spacing:.3em;display:block;margin-bottom:5px;font-weight:500}
+.topbar-right{display:flex;gap:10px;align-items:center}
+.content{flex:1;overflow-y:auto;padding:26px 30px 40px}
+
+/* ===== 通用组件 ===== */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:9px 17px;border-radius:9px;font-size:13px;cursor:pointer;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--text);
+  transition:all .16s;font-family:var(--sans);white-space:nowrap;
+}
+.btn svg{width:15px;height:15px}
+.btn:hover{border-color:var(--line);background:#16233a;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.primary{background:linear-gradient(135deg,rgba(34,211,238,.22),rgba(34,211,238,.08));border-color:rgba(34,211,238,.45);color:var(--cyan)}
+.btn.primary:hover{background:linear-gradient(135deg,rgba(34,211,238,.34),rgba(34,211,238,.14));box-shadow:0 0 22px rgba(34,211,238,.22)}
+.btn.gold{background:linear-gradient(135deg,rgba(232,182,76,.18),rgba(232,182,76,.05));border-color:rgba(232,182,76,.4);color:var(--gold)}
+.btn.gold:hover{box-shadow:0 0 22px rgba(232,182,76,.18)}
+.btn.danger{color:var(--red);border-color:rgba(248,113,113,.3)}
+.btn.danger:hover{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.5)}
+.btn.sm{padding:6px 12px;font-size:12px;border-radius:7px}
+.btn.icon{padding:7px;width:32px;height:32px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+input,select,textarea{
+  background:#0a101d;border:1px solid var(--line2);border-radius:9px;color:var(--text);
+  padding:10px 13px;font-size:13px;font-family:var(--sans);outline:none;transition:border .15s;
+  width:100%;
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(34,211,238,.5);box-shadow:0 0 0 3px rgba(34,211,238,.08)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%237d8ba0' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer}
+label.fld-label{display:block;font-size:11px;color:var(--muted);letter-spacing:.14em;margin-bottom:7px}
+.hint{font-size:11px;color:var(--faint);margin-top:6px;line-height:1.6}
+
+.card{
+  background:linear-gradient(180deg,rgba(16,26,46,.55),rgba(13,21,36,.55));
+  border:1px solid var(--line2);border-radius:15px;padding:22px;
+}
+.card h3{font-size:14px;font-weight:600;letter-spacing:.06em;margin-bottom:16px;display:flex;align-items:center;gap:9px}
+.card h3 .bar{width:3px;height:14px;background:var(--cyan);border-radius:2px;box-shadow:0 0 6px var(--cyan)}
+.card h3 .right{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.08em}
+
+.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.05em;white-space:nowrap}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+.badge.active{color:var(--green);background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.28)}
+.badge.used{color:var(--blue);background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.28)}
+.badge.revoked{color:var(--red);background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.28)}
+.badge.expired{color:var(--amber);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.28)}
+
+/* 仪表盘 */
+.stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px}
+.stat{
+  padding:19px 20px 17px;border-radius:14px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,rgba(16,26,46,.7),rgba(13,21,36,.7));
+  border:1px solid var(--line2); transition:all .2s;
+}
+.stat:hover{border-color:var(--line);transform:translateY(-2px)}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--sc,var(--cyan));opacity:.75}
+.stat .num{font-size:30px;font-weight:700;font-family:var(--mono);letter-spacing:-.02em;line-height:1.1}
+.stat .lbl{font-size:11px;color:var(--muted);letter-spacing:.16em;margin-top:8px}
+.stat .ico{position:absolute;right:14px;top:14px;opacity:.16}
+.stat .ico svg{width:34px;height:34px}
+.dash-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+.chart{display:flex;align-items:flex-end;gap:7px;height:150px;padding-top:8px}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end}
+.chart .bar{width:100%;max-width:26px;background:linear-gradient(180deg,var(--cyan),rgba(34,211,238,.18));border-radius:4px 4px 2px 2px;min-height:2px;transition:height .5s cubic-bezier(.2,.8,.3,1);position:relative}
+.chart .bar:hover::after{content:attr(data-v);position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);font-size:10px;font-family:var(--mono);color:var(--cyan);background:#0a101d;border:1px solid var(--line);padding:2px 7px;border-radius:5px;white-space:nowrap}
+.chart .x{font-size:9px;color:var(--faint);font-family:var(--mono)}
+.feed{display:flex;flex-direction:column;gap:9px}
+.feed-item{display:flex;align-items:center;gap:11px;padding:10px 12px;background:rgba(10,16,29,.5);border:1px solid var(--line2);border-radius:9px;font-size:12px}
+.feed-item .k{font-family:var(--mono);color:var(--cyan);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-item time{color:var(--faint);font-size:10px;font-family:var(--mono);white-space:nowrap}
+
+/* 表格 */
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.toolbar .search{flex:1;min-width:190px;max-width:340px;position:relative}
+.toolbar .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--faint)}
+.toolbar .search input{padding-left:35px}
+.toolbar select{width:auto;min-width:118px}
+.spacer{flex:1}
+.table-wrap{border:1px solid var(--line2);border-radius:13px;overflow:auto;background:rgba(13,21,36,.45)}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px}
+thead th{
+  text-align:left;padding:11px 14px;font-size:10.5px;letter-spacing:.14em;color:var(--muted);
+  background:rgba(10,16,29,.7);border-bottom:1px solid var(--line2);font-weight:600;white-space:nowrap;
+}
+tbody td{padding:11px 14px;border-bottom:1px solid rgba(148,163,184,.06);vertical-align:middle}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:rgba(56,189,248,.04)}
+tbody tr:last-child td{border-bottom:none}
+td.k{font-family:var(--mono);font-size:12.5px;color:var(--cyan);white-space:nowrap}
+td.k .mask{color:var(--muted);letter-spacing:.05em}
+td .note{color:var(--muted);font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+td time{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+td.time-warn{color:var(--amber)!important}
+.row-acts{display:flex;gap:5px}
+.chk{width:15px;height:15px;accent-color:#22d3ee;cursor:pointer}
+.pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.empty{padding:60px 20px;text-align:center;color:var(--faint)}
+.empty svg{width:54px;height:54px;margin-bottom:14px;opacity:.35}
+.empty p{font-size:13px}
+.empty .sub{font-size:11px;margin-top:7px}
+
+/* 发布页 */
+.pub-grid{display:grid;grid-template-columns:1.25fr .9fr;gap:16px;align-items:start}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.form-grid .full{grid-column:1/-1}
+.radio-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.radio-c{
+  padding:14px 13px;border:1px solid var(--line2);border-radius:11px;cursor:pointer;
+  transition:all .16s;background:rgba(10,16,29,.4);
+}
+.radio-c:hover{border-color:var(--line)}
+.radio-c.on{border-color:rgba(34,211,238,.5);background:var(--cyan-dim);box-shadow:0 0 16px rgba(34,211,238,.08)}
+.radio-c .t{font-size:12.5px;font-weight:600}
+.radio-c .d{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.5}
+.radio-c.on .t{color:var(--cyan)}
+.preview-box{
+  background:#0a101d;border:1px dashed var(--line);border-radius:10px;padding:16px;
+  font-family:var(--mono);font-size:14px;color:var(--gold);letter-spacing:.06em;
+  display:flex;flex-direction:column;gap:8px;word-break:break-all;
+}
+.preview-box .pv-lbl{font-size:10px;color:var(--faint);letter-spacing:.2em;font-family:var(--sans)}
+.preview-box .pv{opacity:.9}
+
+/* 验证器 */
+.verify-wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.verify-input{position:relative}
+.verify-input input{
+  font-family:var(--mono);font-size:17px;letter-spacing:.1em;text-align:center;
+  padding:17px 90px 17px 17px;text-transform:uppercase;border-radius:12px;
+  background:#0a101d;border:1px solid var(--line);
+}
+.verify-input .btn{position:absolute;right:7px;top:7px;bottom:7px;padding:0 22px}
+.verify-result{border-radius:14px;padding:24px;border:1px solid var(--line2);display:none;animation:pop .3s cubic-bezier(.2,.9,.3,1.2)}
+.verify-result.show{display:block}
+.verify-result.ok{border-color:rgba(52,211,153,.4);background:linear-gradient(180deg,rgba(52,211,153,.08),rgba(13,21,36,.6))}
+.verify-result.bad{border-color:rgba(248,113,113,.4);background:linear-gradient(180deg,rgba(248,113,113,.07),rgba(13,21,36,.6))}
+.vr-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.vr-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none}
+.ok .vr-ico{background:rgba(52,211,153,.14);color:var(--green)}
+.bad .vr-ico{background:rgba(248,113,113,.14);color:var(--red)}
+.vr-ico svg{width:23px;height:23px}
+.vr-title{font-size:16px;font-weight:650}
+.vr-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.vr-rows{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.vr-row{display:flex;justify-content:space-between;padding:9px 13px;background:rgba(10,16,29,.55);border-radius:8px;font-size:12px}
+.vr-row span{color:var(--muted)} .vr-row b{font-family:var(--mono);font-weight:500}
+
+/* 数据页 */
+.data-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.danger-zone{border-color:rgba(248,113,113,.3);background:linear-gradient(180deg,rgba(248,113,113,.05),rgba(13,21,36,.5))}
+.danger-zone h3 .bar{background:var(--red);box-shadow:0 0 6px var(--red)}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(148,163,184,.07);font-size:13px}
+.switch-row:last-child{border-bottom:none}
+.switch-row .d{font-size:11px;color:var(--muted);margin-top:3px}
+.switch{position:relative;width:40px;height:21px;flex:none;cursor:pointer}
+.switch input{opacity:0;width:0;height:0}
+.switch .sl{position:absolute;inset:0;background:#1e293b;border-radius:21px;transition:.2s;border:1px solid var(--line2)}
+.switch .sl::before{content:'';position:absolute;left:3px;top:2.5px;width:14px;height:14px;background:var(--muted);border-radius:50%;transition:.2s}
+.switch input:checked+.sl{background:var(--cyan-dim);border-color:rgba(34,211,238,.45)}
+.switch input:checked+.sl::before{transform:translateX(19px);background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+
+/* 模态框 & toast */
+.modal-mask{position:fixed;inset:0;background:rgba(4,7,13,.75);backdrop-filter:blur(5px);z-index:150;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-mask.show{display:flex;animation:fadein .18s}
+.modal{width:min(460px,94vw);background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:26px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:pop .25s cubic-bezier(.2,.9,.3,1.15)}
+.modal h3{font-size:16px;margin-bottom:8px}
+.modal .m-body{font-size:13px;color:var(--muted);line-height:1.75;margin-bottom:20px}
+.modal .m-body b{color:var(--text)}
+.modal .m-body code{font-family:var(--mono);color:var(--cyan);background:var(--cyan-dim);padding:1px 6px;border-radius:5px;font-size:12px}
+.modal .m-acts{display:flex;gap:10px;justify-content:flex-end}
+.modal .m-acts .btn{min-width:96px}
+#toasts{position:fixed;top:18px;right:18px;z-index:300;display:flex;flex-direction:column;gap:9px}
+.toast{
+  display:flex;align-items:center;gap:10px;padding:12px 17px;border-radius:11px;font-size:12.5px;
+  background:rgba(16,26,46,.95);border:1px solid var(--line);color:var(--text);
+  box-shadow:0 12px 40px rgba(0,0,0,.5);animation:slidein .25s cubic-bezier(.2,.9,.3,1.1);
+  backdrop-filter:blur(8px);max-width:340px;
+}
+.toast.ok{border-color:rgba(52,211,153,.4)} .toast.ok svg{color:var(--green)}
+.toast.err{border-color:rgba(248,113,113,.4)} .toast.err svg{color:var(--red)}
+.toast.info svg{color:var(--cyan)}
+.toast svg{width:16px;height:16px;flex:none}
+.toast.out{animation:slideout .25s forwards}
+
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{opacity:0;transform:scale(.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes slidein{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideout{to{opacity:0;transform:translateX(40px)}}
+.section{display:none;animation:fadein .22s}
+.section.on{display:block}
+
+/* 响应式 */
+@media (max-width:1080px){
+  .stat-grid{grid-template-columns:repeat(3,1fr)}
+  .dash-grid,.pub-grid,.data-grid{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  #app{grid-template-columns:1fr}
+  aside{position:fixed;bottom:0;left:0;right:0;height:auto;flex-direction:row;padding:8px;z-index:100;border-right:none;border-top:1px solid var(--line)}
+  .brand,.aside-foot{display:none}
+  nav{flex-direction:row;margin-top:0;width:100%;justify-content:space-around}
+  .nav-item{flex-direction:column;gap:3px;font-size:10px;padding:7px 8px}
+  .nav-item.on::before{display:none}
+  .nav-badge{display:none}
+  main{padding-bottom:64px}
+  .topbar{padding:14px 16px}
+  .content{padding:16px 14px 30px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .radio-cards{grid-template-columns:1fr}
+  .topbar-right .btn span{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 锁屏 ===== -->
+<div id="lock">
+  <div class="lock-box">
+    <div class="lock-logo">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 10px rgba(34,211,238,.5))">
+        <rect x="3" y="11" width="18" height="11" rx="2.5"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <circle cx="12" cy="16.5" r="1.4" fill="#22d3ee" stroke="none"/>
+        <path d="M12 18v1.5"/>
+      </svg>
+    </div>
+    <h1>CIPHER VAULT</h1>
+    <div class="sub">卡密保险库 · 本地加密存储</div>
+    <div class="lock-form" id="lockForm">
+      <div class="fld">
+        <label id="lockLabel">访问密码</label>
+        <input type="password" id="lockPwd" placeholder="输入密码解锁" autocomplete="current-password">
+      </div>
+      <div class="fld" id="lockConfirmWrap" style="display:none">
+        <label>确认密码</label>
+        <input type="password" id="lockPwd2" placeholder="再次输入密码">
+      </div>
+      <div class="lock-msg" id="lockMsg"></div>
+      <button class="btn primary" id="lockBtn" style="width:100%;padding:12px">解 锁</button>
+    </div>
+    <div class="lock-forgot" id="lockForgot">忘记密码？</div>
+  </div>
+</div>
+
+<!-- ===== 主应用 ===== -->
+<div id="app" class="locked">
+  <aside>
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" style="filter:drop-shadow(0 0 6px rgba(34,211,238,.45))">
+        <rect x="3" y="11" width="18" height="11" rx="2.5"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <circle cx="12" cy="16.5" r="1.3" fill="#22d3ee" stroke="none"/>
+      </svg>
+      <div>
+        <div class="brand-name">CIPHER VAULT</div>
+        <div class="brand-sub">卡密保险库</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <div class="nav-item on" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="3" width="7.5" height="9" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="1.5"/><rect x="3" y="16" width="7.5" height="5" rx="1.5"/><rect x="13.5" y="12" width="7.5" height="9" rx="1.5"/></svg>
+        仪表盘
+      </div>
+      <div class="nav-item" data-page="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M7 15h4"/></svg>
+        卡密库
+      </div>
+      <div class="nav-item" data-page="publish">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        发布卡密
+      </div>
+      <div class="nav-item" data-page="verify">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-4.4-7.7L21 8"/></svg>
+        验证器
+      </div>
+      <div class="nav-item" data-page="data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><ellipse cx="12" cy="5" rx="8" ry="2.6"/><path d="M4 5v14c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6V5"/><path d="M4 12c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6"/></svg>
+        数据管理
+      </div>
+    </nav>
+    <div class="aside-foot">
+      <div class="lock-state"><span class="dot" id="lockDot"></span><span id="lockStateTxt">已解锁 · 本地存储</span></div>
+      <button class="btn-lock" id="btnLockNow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        立即锁定
+      </button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="page-title"><span class="en" id="pageEn">DASHBOARD</span><span id="pageCn">仪表盘</span></div>
+      <div class="topbar-right">
+        <button class="btn sm" id="btnExportTop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <span>备份数据</span>
+        </button>
+        <button class="btn sm primary" onclick="go('publish')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>发布卡密</span>
+        </button>
+      </div>
+    </div>
+    <div class="content" id="content">
+
+      <!-- 仪表盘 -->
+      <section class="section on" id="sec-dashboard">
+        <div class="stat-grid" id="statGrid"></div>
+        <div class="dash-grid">
+          <div class="card">
+            <h3><span class="bar"></span>近 14 天发布量<span class="right" id="chartTotal"></span></h3>
+            <div class="chart" id="chart"></div>
+          </div>
+          <div class="card">
+            <h3><span class="bar"></span>最近发布</h3>
+            <div class="feed" id="feed"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 卡密库 -->
+      <section class="section" id="sec-library">
+        <div class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="libSearch" placeholder="搜索卡密 / 备注…">
+          </div>
+          <select id="libFilter">
+            <option value="all">全部状态</option>
+            <option value="active">有效中</option>
+            <option value="used">已使用</option>
+            <option value="revoked">已撤回</option>
+            <option value="expired">已过期</option>
+          </select>
+          <select id="libSort">
+            <option value="new">最新发布</option>
+            <option value="expire">即将到期</option>
+            <option value="status">按状态</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn sm" id="btnBatchRevoke">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+            <span>批量撤回</span>
+          </button>
+          <button class="btn sm danger" id="btnBatchDel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+            <span>批量删除</span>
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" class="chk" id="chkAll"></th>
+              <th>卡密</th><th>备注</th><th>状态</th><th>发布时间</th><th>有效期规则</th><th style="width:150px">操作</th>
+            </tr></thead>
+            <tbody id="libBody"></tbody>
+          </table>
+          <div class="empty" id="libEmpty" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <p>还没有卡密</p><div class="sub">点击右上角「发布卡密」开始生成</div>
+          </div>
+        </div>
+        <div class="pager" id="libPager"></div>
+      </section>
+
+      <!-- 发布 -->
+      <section class="section" id="sec-publish">
+        <div class="pub-grid">
+          <div class="card">
+            <h3><span class="bar"></span>卡密参数</h3>
+            <div class="form-grid">
+              <div>
+                <label class="fld-label">前缀（可留空）</label>
+                <input id="pubPrefix" value="TOYKA" maxlength="12" placeholder="如 TOYKA">
+              </div>
+              <div>
+                <label class="fld-label">生成数量（1 - 500）</label>
+                <input id="pubCount" type="number" min="1" max="500" value="10">
+              </div>
+              <div>
+                <label class="fld-label">分段数（1 - 4）</label>
+                <input id="pubSegs" type="number" min="1" max="4" value="3">
+              </div>
+              <div>
+                <label class="fld-label">每段字符数（4 - 8）</label>
+                <input id="pubSegLen" type="number" min="4" max="8" value="4">
+              </div>
+              <div class="full">
+                <label class="fld-label">备注（应用于本批次）</label>
+                <input id="pubNote" placeholder="如：淘宝店客户·订单#20261023">
+              </div>
+              <div class="full">
+                <label class="fld-label">有效期规则</label>
+                <div class="radio-cards">
+                  <div class="radio-c on" data-mode="permanent">
+                    <div class="t">永久有效</div><div class="d">不设到期时间，除非手动撤回</div>
+                  </div>
+                  <div class="radio-c" data-mode="until">
+                    <div class="t">截止日期</div><div class="d">统一在此日期前有效</div>
+                  </div>
+                  <div class="radio-c" data-mode="firstuse">
+                    <div class="t">首用后 N 天</div><div class="d">首次验证后 N 天内有效</div>
+                  </div>
+                </div>
+              </div>
+              <div class="full" id="pubUntilWrap" style="display:none">
+                <label class="fld-label">截止日期</label>
+                <input id="pubUntil" type="date">
+              </div>
+              <div class="full" id="pubDaysWrap" style="display:none">
+                <label class="fld-label">首次使用后有效天数</label>
+                <input id="pubDays" type="number" min="1" max="3650" value="30">
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+              <h3><span class="bar"></span>实时预览</h3>
+              <div class="preview-box">
+                <div class="pv-lbl">SAMPLE × 2</div>
+                <div class="pv" id="pubPreview">—</div>
+                <div class="pv" id="pubPreview2">—</div>
+              </div>
+              <div class="hint">字符集已剔除易混淆字符（0 / O / 1 / I），降低客服沟通成本。</div>
+            </div>
+            <button class="btn primary" id="btnPublish" style="padding:14px;font-size:14px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              生成并发布
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 验证器 -->
+      <section class="section" id="sec-verify">
+        <div class="verify-wrap">
+          <div class="card">
+            <h3><span class="bar"></span>卡密验证<span class="right">本地校验 · 不修改数据</span></h3>
+            <div class="verify-input">
+              <input id="verifyInput" placeholder="输入卡密，如 TOYKA-A7K2-9FQ1-X3M8" autocomplete="off" spellcheck="false">
+              <button class="btn primary" id="btnVerify">验 证</button>
+            </div>
+            <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none">
+              <input type="checkbox" class="chk" id="verifyMark" checked>
+              验证时标记「首次使用」（首用后 N 天模式必须开启）
+            </label>
+          </div>
+          <div class="verify-result" id="verifyResult"></div>
+        </div>
+      </section>
+
+      <!-- 数据管理 -->
+      <section class="section" id="sec-data">
+        <div class="data-grid">
+          <div class="card">
+            <h3><span class="bar"></span>备份与迁移</h3>
+            <p class="hint" style="margin:0 0 15px">数据保存在本机浏览器 localStorage。换电脑 / 换浏览器前，请先导出 JSON 备份；到新设备导入即可恢复全部卡密。</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn" id="btnExportJson">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                导出 JSON 备份
+              </button>
+              <button class="btn" id="btnExportCsv">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+                导出 CSV 表格
+              </button>
+              <button class="btn" id="btnImport">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                导入 JSON
+              </button>
+              <input type="file" id="importFile" accept=".json" style="display:none">
+            </div>
+            <div class="hint" style="margin-top:14px">导入策略：按卡密编号合并，已存在的自动跳过并报告数量。</div>
+          </div>
+          <div class="card">
+            <h3><span class="bar"></span>安全设置</h3>
+            <div class="switch-row">
+              <div><div>自动锁定</div><div class="d">无操作自动回到锁屏</div></div>
+              <select id="autoLockSel" style="width:130px">
+                <option value="1">1 分钟</option>
+                <option value="5" selected>5 分钟</option>
+                <option value="15">15 分钟</option>
+                <option value="30">30 分钟</option>
+                <option value="0">从不</option>
+              </select>
+            </div>
+            <div class="switch-row">
+              <div><div>修改访问密码</div><div class="d">设置新的解锁密码</div></div>
+              <button class="btn sm" id="btnChangePwd">修改</button>
+            </div>
+            <div class="switch-row">
+              <div><div>存储用量</div><div class="d" id="storeUsage">—</div></div>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--cyan)" id="storeCount">0 条</span>
+            </div>
+          </div>
+          <div class="card danger-zone" style="grid-column:1/-1">
+            <h3><span class="bar"></span>危险区</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+              <div class="hint" style="margin:0;max-width:520px">清空后所有卡密记录、备注、使用记录将不可恢复（localStorage 本地删除）。执行前请确认已导出备份。</div>
+              <button class="btn danger" id="btnWipe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                清空全部数据
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- 模态框 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h3 id="mTitle">确认</h3>
+    <div class="m-body" id="mBody"></div>
+    <div class="m-acts">
+      <button class="btn" id="mCancel">取消</button>
+      <button class="btn primary" id="mOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+'use strict';
+/* ================= 工具 ================= */
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const fmtDate=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const fmtTime=ts=>{const d=new Date(ts);return fmtDate(ts)+' '+pad(d.getHours())+':'+pad(d.getMinutes())};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,9);
+const DAY=86400000;
+
+/* 迷你 SHA-256（file:// 与 https 均可用，不依赖 crypto.subtle） */
+const sha256=(function(){
+  const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+  const H0=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const rotr=(x,n)=>(x>>>n)|(x<<(32-n));
+  function toBytes(str){const b=[];for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);if(c<0x80)b.push(c);else if(c<0x800){b.push(0xc0|(c>>6),0x80|(c&63));}else{b.push(0xe0|(c>>12),0x80|((c>>6)&63),0x80|(c&63));}}return b;}
+  return function(str){
+    const H=new Uint32Array(H0); /* 每次调用重置初始状态 */
+    const msg=toBytes(String(str));const bitLen=msg.length*8;
+    msg.push(0x80);while(msg.length%64!==56)msg.push(0);
+    for(let i=0;i<8;i++)msg.push((bitLen/Math.pow(256,7-i))&255);
+    const w=new Uint32Array(64);
+    for(let off=0;off<msg.length;off+=64){
+      for(let i=0;i<16;i++)w[i]=(msg[off+i*4]<<24)|(msg[off+i*4+1]<<16)|(msg[off+i*4+2]<<8)|msg[off+i*4+3];
+      for(let i=16;i<64;i++){const s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>>3);const s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;}
+      let a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+      for(let i=0;i<64;i++){
+        const S1=rotr(e,6)^rotr(e,11)^rotr(e,25);
+        const ch=(e&f)^(~e&g);
+        const t1=(h+S1+ch+K[i]+w[i])>>>0;
+        const S0=rotr(a,2)^rotr(a,13)^rotr(a,22);
+        const maj=(a&b)^(a&c)^(b&c);
+        const t2=(S0+maj)>>>0;
+        h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+      }
+      H[0]=(H[0]+a)>>>0;H[1]=(H[1]+b)>>>0;H[2]=(H[2]+c)>>>0;H[3]=(H[3]+d)>>>0;
+      H[4]=(H[4]+e)>>>0;H[5]=(H[5]+f)>>>0;H[6]=(H[6]+g)>>>0;H[7]=(H[7]+h)>>>0;
+    }
+    return Array.from(H).map(x=>('00000000'+x.toString(16)).slice(-8)).join('');
+  };
+})();
+
+function toast(msg,type='info'){
+  const t=document.createElement('div');t.className='toast '+type;
+  const icons={ok:'<path d="M20 6L9 17l-5-5"/>',err:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/>'};
+  t.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">'+icons[type]+'</svg><span>'+esc(msg)+'</span>';
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),260);},2600);
+}
+function copyText(text,okMsg){
+  const done=()=>toast(okMsg||'已复制到剪贴板','ok');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));}
+  else fallbackCopy(text,done);
+}
+function fallbackCopy(text,done){
+  const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');done();}catch(e){toast('复制失败，请手动复制','err');}
+  ta.remove();
+}
+
+/* ================= 存储 ================= */
+const LS_DATA='ciphervault.cards.v1', LS_AUTH='ciphervault.auth.v1', LS_CFG='ciphervault.cfg.v1';
+let cards=[], auth=null, cfg={autoLock:5};
+
+function loadAll(){
+  try{cards=JSON.parse(localStorage.getItem(LS_DATA)||'[]');}catch(e){cards=[];}
+  try{auth=JSON.parse(localStorage.getItem(LS_AUTH)||'null');}catch(e){auth=null;}
+  try{const c=JSON.parse(localStorage.getItem(LS_CFG)||'{}');cfg=Object.assign(cfg,c||{});}catch(e){}
+  if(!Array.isArray(cards))cards=[];
+}
+function saveCards(){localStorage.setItem(LS_DATA,JSON.stringify(cards));updateStoreInfo();}
+function saveCfg(){localStorage.setItem(LS_CFG,JSON.stringify(cfg));}
+function updateStoreInfo(){
+  const bytes=new Blob([JSON.stringify(cards)]).size;
+  $('#storeUsage').textContent='localStorage · 约 '+(bytes<1024?bytes+' B':(bytes/1024).toFixed(1)+' KB');
+  $('#storeCount').textContent=cards.length+' 条';
+}
+
+/* ================= 状态机 ================= */
+function statusOf(c,now){
+  now=now||Date.now();
+  if(c.revoked)return'revoked';
+  if(c.expiresAt&&now>c.expiresAt)return'expired';
+  if(c.durationDays&&c.usedAt&&now>c.usedAt+c.durationDays*DAY)return'expired';
+  if(c.usedAt)return'used';
+  return'active';
+}
+const STATUS_TXT={active:'有效中',used:'已使用',revoked:'已撤回',expired:'已过期'};
+function deadlineOf(c){
+  if(c.revoked)return{ts:null,label:'已撤回'};
+  if(c.expiresAt)return{ts:c.expiresAt,label:'截止 '+fmtDate(c.expiresAt)};
+  if(c.durationDays){
+    if(c.usedAt)return{ts:c.usedAt+c.durationDays*DAY,label:'首用+'+c.durationDays+'天'};
+    return{ts:null,label:'首用后 '+c.durationDays+' 天'};
+  }
+  return{ts:null,label:'永久有效'};
+}
+function daysLeft(c,now){
+  now=now||Date.now();
+  if(c.revoked)return null;
+  if(c.expiresAt)return Math.ceil((c.expiresAt-now)/DAY);
+  if(c.durationDays&&c.usedAt)return Math.ceil((c.usedAt+c.durationDays*DAY-now)/DAY);
+  return null;
+}
+
+/* ================= 生成 ================= */
+const CHARS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function randSeg(n){let s='';const a=new Uint32Array(n);(crypto.getRandomValues?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*4294967296));for(let i=0;i<n;i++)s+=CHARS[a[i]%CHARS.length];return s;}
+function genKey(prefix,segs,len){
+  const body=Array.from({length:segs},()=>randSeg(len)).join('-');
+  return prefix?prefix+'-'+body:body;
+}
+function uniqKey(prefix,segs,len,existing){
+  const set=existing||new Set(cards.map(c=>c.key));
+  let k,guard=0;
+  do{k=genKey(prefix,segs,len);guard++;}while(set.has(k)&&guard<500);
+  return k;
+}
+
+/* ================= 路由 ================= */
+const PAGE_META={dashboard:['DASHBOARD','仪表盘'],library:['KEY LIBRARY','卡密库'],publish:['PUBLISH','发布卡密'],verify:['VERIFY','验证器'],data:['DATA','数据管理']};
+function go(page){
+  if(!PAGE_META[page])page='dashboard';
+  location.hash='#/'+page;
+}
+function route(){
+  const page=(location.hash.replace('#/','')||'dashboard').split('?')[0];
+  const p=PAGE_META[page]?page:'dashboard';
+  $$('.nav-item').forEach(n=>n.classList.toggle('on',n.dataset.page===p));
+  $$('.section').forEach(s=>s.classList.toggle('on',s.id==='sec-'+p));
+  $('#pageEn').textContent=PAGE_META[p][0];$('#pageCn').textContent=PAGE_META[p][1];
+  if(p==='dashboard')renderDashboard();
+  if(p==='library')renderLibrary();
+  if(p==='data')updateStoreInfo();
+}
+window.addEventListener('hashchange',route);
+
+/* ================= 仪表盘 ================= */
+function renderDashboard(){
+  const now=Date.now();
+  const st=cards.map(c=>statusOf(c,now));
+  const soonExpire=cards.filter(c=>{const d=daysLeft(c,now);return statusOf(c,now)==='active'&&d!==null&&d<=7;}).length;
+  const stats=[
+    {n:cards.length,l:'卡密总数',c:'#22d3ee',i:'<rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'},
+    {n:st.filter(s=>s==='active').length,l:'有效中',c:'#34d399',i:'<path d="M20 6L9 17l-5-5"/>'},
+    {n:st.filter(s=>s==='used').length,l:'已使用',c:'#60a5fa',i:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'},
+    {n:st.filter(s=>s==='revoked').length,l:'已撤回',c:'#f87171',i:'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>'},
+    {n:soonExpire,l:'7 天内到期',c:'#fbbf24',i:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><path d="M12 3v1"/>'}
+  ];
+  $('#statGrid').innerHTML=stats.map(s=>
+    '<div class="stat" style="--sc:'+s.c+'"><div class="num" style="color:'+s.c+'">'+s.n+'</div><div class="lbl">'+s.l+'</div>'+
+    '<div class="ico" style="color:'+s.c+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'+s.i+'</svg></div></div>'
+  ).join('');
+  /* 近 14 天柱状图 */
+  const days=14,buckets=[];const start=new Date();start.setHours(0,0,0,0);
+  for(let i=days-1;i>=0;i--){const d0=start.getTime()-i*DAY,b={d0,cnt:0,label:fmtDate(d0).slice(5)};buckets.push(b);}
+  cards.forEach(c=>{const idx=buckets.findIndex(b=>c.createdAt>=b.d0&&c.createdAt<b.d0+DAY);if(idx>=0)buckets[idx].cnt++;});
+  const max=Math.max(...buckets.map(b=>b.cnt),1);
+  $('#chart').innerHTML=buckets.map(b=>
+    '<div class="col"><div class="bar" style="height:'+Math.max(2,b.cnt/max*112)+'px" data-v="'+b.label+' · '+b.cnt+' 张"></div><div class="x">'+b.label.split('-')[1]+'</div></div>'
+  ).join('');
+  const total=buckets.reduce((s,b)=>s+b.cnt,0);
+  $('#chartTotal').textContent='共 '+total+' 张';
+  /* 最近发布 */
+  const recent=[...cards].sort((a,b)=>b.createdAt-a.createdAt).slice(0,6);
+  $('#feed').innerHTML=recent.length?recent.map(c=>
+    '<div class="feed-item"><span class="badge '+statusOf(c)+'">'+STATUS_TXT[statusOf(c)]+'</span><span class="k">'+esc(c.key)+'</span><time>'+fmtTime(c.createdAt)+'</time></div>'
+  ).join(''):'<div class="empty" style="padding:30px"><p>暂无发布记录</p></div>';
+}
+
+/* ================= 卡密库 ================= */
+const lib={page:1,per:20,sel:new Set()};
+function libFiltered(){
+  const q=$('#libSearch').value.trim().toLowerCase(), f=$('#libFilter').value;
+  let list=cards.filter(c=>{
+    if(f!=='all'&&statusOf(c)!==f)return false;
+    if(q&&c.key.toLowerCase().indexOf(q)<0&&(c.note||'').toLowerCase().indexOf(q)<0)return false;
+    return true;
+  });
+  const s=$('#libSort').value;
+  list.sort((a,b)=>{
+    if(s==='expire'){const da=deadlineOf(a),db=deadlineOf(b);
+      if(!da.ts&&!db.ts)return b.createdAt-a.createdAt;
+      if(!da.ts)return 1; if(!db.ts)return -1;
+      return da.ts-db.ts;}
+    if(s==='status'){const o={active:0,used:1,expired:2,revoked:3};return o[statusOf(a)]-o[statusOf(b)]||b.createdAt-a.createdAt;}
+    return b.createdAt-a.createdAt;
+  });
+  return list;
+}
+function renderLibrary(){
+  const list=libFiltered(), now=Date.now();
+  const pages=Math.max(1,Math.ceil(list.length/lib.per));
+  if(lib.page>pages)lib.page=pages;
+  const rows=list.slice((lib.page-1)*lib.per,lib.page*lib.per);
+  $('#libEmpty').style.display=list.length?'none':'block';
+  $('#libBody').innerHTML=rows.map(c=>{
+    const st=statusOf(c,now), dl=deadlineOf(c), dLeft=daysLeft(c,now);
+    const warn=dLeft!==null&&dLeft<=7&&(st==='active'||st==='used');
+    const revokeBtn=st==='revoked'
+      ?'<button class="btn icon sm" title="恢复" data-act="restore" data-id="'+c.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>'
+      :'<button class="btn icon sm" title="撤回" data-act="revoke" data-id="'+c.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></button>';
+    return '<tr data-id="'+c.id+'">'+
+      '<td><input type="checkbox" class="chk rowchk" data-id="'+c.id+'" '+(lib.sel.has(c.id)?'checked':'')+'></td>'+
+      '<td class="k"><span class="mask">'+esc(maskKey(c.key))+'</span> <button class="btn icon sm" style="border:none;background:none;vertical-align:-2px" title="显示/复制" data-act="copy" data-id="'+c.id+'"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td>'+
+      '<td><span class="note" title="'+esc(c.note||'')+'">'+esc(c.note||'—')+'</span></td>'+
+      '<td><span class="badge '+st+'">'+STATUS_TXT[st]+'</span></td>'+
+      '<td><time>'+fmtTime(c.createdAt)+'</time></td>'+
+      '<td><time class="'+(warn?'time-warn':'')+'">'+esc(dl.label)+(dLeft!==null&&dLeft>=0&&(st==='active'||st==='used')?'<br><span style="font-size:10px">剩 '+dLeft+' 天</span>':'')+'</time></td>'+
+      '<td><div class="row-acts">'+revokeBtn+
+        '<button class="btn icon sm" title="编辑" data-act="edit" data-id="'+c.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>'+
+        '<button class="btn icon sm" title="删除" data-act="del" data-id="'+c.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>'+
+      '</div></td></tr>';
+  }).join('');
+  $('#libPager').innerHTML=list.length
+    ?'<button class="btn sm" '+(lib.page<=1?'disabled':'')+' id="pgPrev">上一页</button><span>'+lib.page+' / '+pages+' 页 · 共 '+list.length+' 条</span><button class="btn sm" '+(lib.page>=pages?'disabled':'')+' id="pgNext">下一页</button>'
+    :'';
+  const pgPrev=$('#pgPrev'),pgNext=$('#pgNext');
+  if(pgPrev)pgPrev.onclick=()=>{lib.page--;renderLibrary();};
+  if(pgNext)pgNext.onclick=()=>{lib.page++;renderLibrary();};
+  const chkAll=$('#chkAll');
+  const visIds=rows.map(c=>c.id);
+  chkAll.checked=visIds.length>0&&visIds.every(id=>lib.sel.has(id));
+  chkAll.onchange=()=>{visIds.forEach(id=>chkAll.checked?lib.sel.add(id):lib.sel.delete(id));renderLibrary();};
+  $$('.rowchk').forEach(el=>el.onchange=()=>{el.checked?lib.sel.add(el.dataset.id):lib.sel.delete(el.dataset.id);renderLibrary();});
+}
+function maskKey(k){
+  if(k.length<=8)return k;
+  const head=k.slice(0,Math.ceil(k.length*0.3)),tail=k.slice(-4);
+  return head+'•'.repeat(Math.max(4,k.length-head.length-4))+tail;
+}
+$('#libBody').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-act]');if(!btn)return;
+  const id=btn.dataset.id,c=cards.find(x=>x.id===id);if(!c)return;
+  const act=btn.dataset.act;
+  if(act==='copy')copyText(c.key,'卡密已复制：'+c.key);
+  if(act==='revoke')confirmModal('撤回卡密','撤回后 <b>'+esc(c.key)+'</b> 将立即失效，可随时恢复。确认撤回？',()=>{
+    c.revoked=true;saveCards();renderLibrary();toast('卡密已撤回','ok');
+  });
+  if(act==='restore')c.revoked=false;saveCards();renderLibrary();toast('卡密已恢复','ok');
+  if(act==='del')confirmModal('删除卡密','删除后 <b>'+esc(c.key)+'</b> 不可恢复。确认删除？',()=>{
+    cards=cards.filter(x=>x.id!==id);lib.sel.delete(id);saveCards();renderLibrary();toast('卡密已删除','ok');
+  });
+  if(act==='edit')openEdit(c);
+});
+$('#libSearch').addEventListener('input',()=>{lib.page=1;renderLibrary();});
+$('#libFilter').addEventListener('change',()=>{lib.page=1;renderLibrary();});
+$('#libSort').addEventListener('change',()=>{lib.page=1;renderLibrary();});
+$('#btnBatchRevoke').onclick=()=>{
+  const ids=[...lib.sel];if(!ids.length)return toast('先勾选卡密','err');
+  confirmModal('批量撤回','将撤回 <b>'+ids.length+'</b> 张卡密，确认？',()=>{
+    cards.forEach(c=>{if(lib.sel.has(c.id))c.revoked=true;});
+    lib.sel.clear();saveCards();renderLibrary();toast(ids.length+' 张卡密已撤回','ok');
+  });
+};
+$('#btnBatchDel').onclick=()=>{
+  const ids=[...lib.sel];if(!ids.length)return toast('先勾选卡密','err');
+  confirmModal('批量删除','将永久删除 <b>'+ids.length+'</b> 张卡密，不可恢复。确认？',()=>{
+    cards=cards.filter(c=>!lib.sel.has(c.id));
+    lib.sel.clear();saveCards();renderLibrary();toast(ids.length+' 张卡密已删除','ok');
+  });
+};
+
+/* ================= 编辑弹窗 ================= */
+function openEdit(c){
+  const dl=deadlineOf(c);
+  const mode=c.revoked?'revoked':(c.expiresAt?'until':(c.durationDays?'firstuse':'permanent'));
+  const mask=$('#modalMask');
+  $('#mTitle').textContent='编辑卡密';
+  $('#mBody').innerHTML=
+    '<div style="font-family:var(--mono);color:var(--cyan);font-size:13px;margin-bottom:16px;word-break:break-all">'+esc(c.key)+'</div>'+
+    '<label class="fld-label">备注</label><input id="edNote" value="'+esc(c.note||'')+'" placeholder="客户 / 订单备注" style="margin-bottom:14px">'+
+    '<label class="fld-label">有效期规则</label>'+
+    '<select id="edMode" style="margin-bottom:12px"><option value="permanent"'+(mode==='permanent'?' selected':'')+'>永久有效</option><option value="until"'+(mode==='until'?' selected':'')+'>截止日期</option><option value="firstuse"'+(mode==='firstuse'?' selected':'')+'>首用后 N 天</option></select>'+
+    '<div id="edUntilWrap" style="display:'+(mode==='until'?'block':'none')+';margin-bottom:12px"><label class="fld-label">截止日期</label><input id="edUntil" type="date" value="'+(c.expiresAt?fmtDate(c.expiresAt):'')+'"></div>'+
+    '<div id="edDaysWrap" style="display:'+(mode==='firstuse'?'block':'none')+'"><label class="fld-label">首用后有效天数</label><input id="edDays" type="number" min="1" max="3650" value="'+(c.durationDays||30)+'"></div>'+
+    (c.usedAt?'<div class="hint">该卡密已于 '+fmtTime(c.usedAt)+' 首次使用</div>':'');
+  $('#mCancel').textContent='取消';$('#mOk').textContent='保存';
+  mask.classList.add('show');
+  const sync=()=>{const m=$('#edMode').value;$('#edUntilWrap').style.display=m==='until'?'block':'none';$('#edDaysWrap').style.display=m==='firstuse'?'block':'none';};
+  $('#edMode').onchange=sync;
+  $('#mOk').onclick=()=>{
+    c.note=$('#edNote').value.trim();
+    const m=$('#edMode').value;
+    c.expiresAt=null;c.durationDays=null;
+    if(m==='until'){const v=$('#edUntil').value;if(!v)return toast('请选择截止日期','err');c.expiresAt=new Date(v+'T23:59:59').getTime();}
+    if(m==='firstuse'){const d=parseInt($('#edDays').value,10);if(!(d>0))return toast('天数必须大于 0','err');c.durationDays=d;}
+    saveCards();closeModal();renderLibrary();toast('已保存修改','ok');
+  };
+  $('#mCancel').onclick=closeModal;
+}
+
+/* ================= 模态框 ================= */
+function confirmModal(title,body,onOk){
+  const mask=$('#modalMask');
+  $('#mTitle').textContent=title;$('#mBody').innerHTML=body;
+  $('#mCancel').textContent='取消';$('#mOk').textContent='确认';
+  mask.classList.add('show');
+  $('#mOk').onclick=()=>{closeModal();onOk&&onOk();};
+  $('#mCancel').onclick=closeModal;
+}
+function closeModal(){$('#modalMask').classList.remove('show');}
+$('#modalMask').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+
+/* ================= 发布 ================= */
+let pubMode='permanent';
+$$('.radio-c').forEach(el=>el.onclick=()=>{
+  $$('.radio-c').forEach(x=>x.classList.remove('on'));el.classList.add('on');
+  pubMode=el.dataset.mode;
+  $('#pubUntilWrap').style.display=pubMode==='until'?'block':'none';
+  $('#pubDaysWrap').style.display=pubMode==='firstuse'?'block':'none';
+  refreshPreview();
+});
+function pubParams(){
+  return{
+    prefix:($('#pubPrefix').value.trim()||'').toUpperCase().replace(/[^A-Z0-9-]/g,''),
+    count:Math.min(500,Math.max(1,parseInt($('#pubCount').value,10)||1)),
+    segs:Math.min(4,Math.max(1,parseInt($('#pubSegs').value,10)||1)),
+    segLen:Math.min(8,Math.max(4,parseInt($('#pubSegLen').value,10)||4)),
+    note:$('#pubNote').value.trim()
+  };
+}
+function refreshPreview(){
+  const p=pubParams();
+  const s1=genKey(p.prefix,p.segs,p.segLen),s2=genKey(p.prefix,p.segs,p.segLen);
+  $('#pubPreview').textContent=s1;$('#pubPreview2').textContent=s2;
+}
+['#pubPrefix','#pubCount','#pubSegs','#pubSegLen'].forEach(s=>$(s).addEventListener('input',refreshPreview));
+$('#btnPublish').onclick=()=>{
+  const p=pubParams();
+  let expiresAt=null,durationDays=null;
+  if(pubMode==='until'){
+    const v=$('#pubUntil').value;
+    if(!v)return toast('请选择截止日期','err');
+    expiresAt=new Date(v+'T23:59:59').getTime();
+  }
+  if(pubMode==='firstuse'){
+    durationDays=Math.min(3650,Math.max(1,parseInt($('#pubDays').value,10)||30));
+  }
+  const existing=new Set(cards.map(c=>c.key));
+  const made=[];const now=Date.now();
+  for(let i=0;i<p.count;i++){
+    made.push({id:uid(),key:uniqKey(p.prefix,p.segs,p.segLen,existing),note:p.note,revoked:false,createdAt:now,expiresAt:expiresAt,durationDays:durationDays,usedAt:null});
+    existing.add(made[made.length-1].key);
+  }
+  cards=cards.concat(made);saveCards();
+  toast('成功发布 '+p.count+' 张卡密','ok');
+  const first=made.slice(0,3).map(c=>c.key).join('\n');
+  confirmModal('发布成功','已生成 <b>'+p.count+'</b> 张卡密（有效期：'+(pubMode==='permanent'?'永久':pubMode==='until'?'至 '+fmtDate(expiresAt):'首用后 '+durationDays+' 天')+'）。<br><br><code>'+esc(first)+'</code>'+(p.count>3?'<br><span style="font-size:11px;color:var(--faint)">…其余 '+(p.count-3)+' 张见卡密库</span>':''),null);
+  $('#mOk').textContent='知道了';
+  $('#mOk').onclick=closeModal;$('#mCancel').style.display='none';
+  setTimeout(()=>{$('#mCancel').style.display='';},400);
+  renderDashboard();
+};
+
+/* ================= 验证器 ================= */
+$('#verifyInput').addEventListener('input',e=>{
+  e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');
+});
+$('#verifyInput').addEventListener('keydown',e=>{if(e.key==='Enter')doVerify();});
+$('#btnVerify').onclick=doVerify;
+function doVerify(){
+  const key=$('#verifyInput').value.trim().toUpperCase();
+  const box=$('#verifyResult');
+  if(!key){box.className='verify-result bad show';box.innerHTML='<div class="vr-head"><div class="vr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg></div><div><div class="vr-title">请输入卡密</div><div class="vr-sub">卡密不区分大小写</div></div></div>';return;}
+  const c=cards.find(x=>x.key===key);
+  if(!c){box.className='verify-result bad show';box.innerHTML='<div class="vr-head"><div class="vr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></div><div><div class="vr-title">卡密不存在</div><div class="vr-sub">系统中没有这张卡密，请检查输入</div></div></div>';return;}
+  /* 首用标记 */
+  let justUsed=false;
+  if($('#verifyMark').checked&&c.durationDays&&!c.usedAt&&!c.revoked){
+    c.usedAt=Date.now();saveCards();justUsed=true;
+  }
+  const st=statusOf(c),dl=deadlineOf(c),dLeft=daysLeft(c);
+  const ok=st==='active'||st==='used';
+  box.className='verify-result '+(ok?'ok show':'bad show');
+  const rows=[
+    ['状态','<span class="badge '+st+'">'+STATUS_TXT[st]+'</span>'],
+    ['有效期规则',esc(dl.label)],
+    dLeft!==null?['剩余天数',(dLeft>=0?dLeft+' 天':'已超期')]:null,
+    ['发布时间',fmtTime(c.createdAt)],
+    c.usedAt?['首次使用',fmtTime(c.usedAt)+(justUsed?'（刚刚）' :'')]:null,
+    c.note?['备注',esc(c.note)]:null
+  ].filter(Boolean);
+  box.innerHTML='<div class="vr-head"><div class="vr-ico">'+(ok
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>')+
+    '</div><div><div class="vr-title">'+(ok?'卡密有效':'卡密不可用')+'</div><div class="vr-sub">'+
+    (st==='active'?(dl.ts?'有效期至 '+fmtDate(dl.ts):'永久有效，可正常使用'):st==='used'?'已激活，处于有效期内':st==='revoked'?'该卡密已被管理员撤回':'该卡密已过有效期')+'</div></div></div>'+
+    '<div class="vr-rows">'+rows.map(r=>'<div class="vr-row"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+'</div>';
+}
+
+/* ================= 导入导出 ================= */
+function download(name,content,type){
+  const blob=new Blob([content],{type:type||'application/octet-stream'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+function exportJson(){
+  download('ciphervault-backup-'+fmtDate(Date.now())+'.json',JSON.stringify({app:'CIPHER VAULT',version:1,exportedAt:new Date().toISOString(),cards:cards},null,2),'application/json');
+  toast('JSON 备份已导出','ok');
+}
+function exportCsv(){
+  const head='卡密,备注,状态,发布时间,到期时间,首次使用\n';
+  const rows=cards.map(c=>[
+    '"'+c.key+'"','"'+String(c.note||'').replace(/"/g,'""')+'"',
+    STATUS_TXT[statusOf(c)],fmtTime(c.createdAt),
+    c.expiresAt?fmtDate(c.expiresAt):(c.durationDays?'首用+'+c.durationDays+'天':'永久'),
+    c.usedAt?fmtTime(c.usedAt):''
+  ].join(','));
+  download('ciphervault-cards-'+fmtDate(Date.now())+'.csv','\ufeff'+head+rows.join('\n'),'text/csv');
+  toast('CSV 已导出','ok');
+}
+$('#btnExportJson').onclick=exportJson;$('#btnExportCsv').onclick=exportCsv;$('#btnExportTop').onclick=exportJson;
+$('#btnImport').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      const list=Array.isArray(data)?data:data.cards;
+      if(!Array.isArray(list))throw new Error('bad format');
+      const existing=new Set(cards.map(c=>c.key));
+      let add=0,skip=0;
+      list.forEach(c=>{
+        if(!c||typeof c.key!=='string'){skip++;return;}
+        if(existing.has(c.key)){skip++;return;}
+        cards.push({id:c.id||uid(),key:c.key,note:String(c.note||''),revoked:!!c.revoked,createdAt:c.createdAt||Date.now(),expiresAt:c.expiresAt||null,durationDays:c.durationDays||null,usedAt:c.usedAt||null});
+        existing.add(c.key);add++;
+      });
+      saveCards();renderDashboard();
+      toast('导入完成：新增 '+add+' 张，跳过 '+skip+' 张','ok');
+    }catch(err){toast('文件格式错误，需本工具导出的 JSON','err');}
+    e.target.value='';
+  };
+  r.readAsText(f);
+};
+$('#btnWipe').onclick=()=>{
+  confirmModal('清空全部数据','此操作将删除本机保存的 <b>'+cards.length+'</b> 张卡密及全部记录，<b>不可恢复</b>。<br><br>如确认，请点击「我已备份，清空」。',()=>{
+    cards=[];lib.sel.clear();saveCards();renderDashboard();renderLibrary();toast('数据已清空','ok');
+  });
+  $('#mOk').textContent='我已备份，清空';$('#mOk').className='btn danger';
+  setTimeout(()=>{$('#mOk').className='btn primary';},500);
+};
+$('#autoLockSel').onchange=e=>{cfg.autoLock=parseInt(e.target.value,10)||0;saveCfg();resetLockTimer();toast('自动锁定设置已保存','ok');};
+
+/* ================= 修改密码 ================= */
+$('#btnChangePwd').onclick=()=>{
+  confirmModal('修改访问密码','设置新密码后立即生效，请牢记。',()=>{});
+  $('#mTitle').textContent='修改访问密码';
+  $('#mBody').innerHTML='<label class="fld-label">新密码（至少 4 位）</label><input id="np1" type="password" placeholder="输入新密码" style="margin-bottom:12px"><label class="fld-label">确认新密码</label><input id="np2" type="password" placeholder="再次输入">';
+  $('#mOk').textContent='保存';
+  $('#mOk').onclick=()=>{
+    const a=$('#np1').value,b=$('#np2').value;
+    if(a.length<4)return toast('密码至少 4 位','err');
+    if(a!==b)return toast('两次输入不一致','err');
+    auth={salt:uid(),hash:sha256(a+':'+uid())};
+    /* 重新计算：salt+hash 用同一次盐 */
+    auth={salt:auth.salt,hash:sha256(auth.salt+':'+a)};
+    localStorage.setItem(LS_AUTH,JSON.stringify(auth));
+    closeModal();toast('密码已更新','ok');
+  };
+  $('#mCancel').onclick=closeModal;
+};
+
+/* ================= 锁 ================= */
+let lockTimer=null,lockCountdown=null;
+function resetLockTimer(){
+  clearTimeout(lockTimer);clearInterval(lockCountdown);
+  const mins=cfg.autoLock;
+  $('#lockDot').className='dot';$('#lockStateTxt').textContent='已解锁 · 本地存储';
+  if(!mins||!auth)return;
+  let left=mins*60;
+  lockTimer=setTimeout(lockNow,mins*60000);
+  lockCountdown=setInterval(()=>{
+    left--;
+    if(left<=60){$('#lockDot').className='dot amber';$('#lockStateTxt').textContent='即将锁定 · '+left+'s';}
+  },1000);
+}
+function lockNow(){
+  clearTimeout(lockTimer);clearInterval(lockCountdown);
+  $('#lock').classList.remove('hidden');
+  $('#app').classList.add('locked');
+  $('#lockPwd').value='';$('#lockMsg').textContent='';$('#lockMsg').className='lock-msg';
+  $('#lockPwd').focus();
+}
+function unlock(){
+  $('#lock').classList.add('hidden');
+  $('#app').classList.remove('locked');
+  resetLockTimer();route();
+}
+['click','keydown','mousemove','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(!$('#app').classList.contains('locked'))resetLockTimer();},{passive:true}));
+$('#btnLockNow').onclick=lockNow;
+
+/* 首次设置 / 解锁 */
+function showLockSetup(){
+  $('#lockLabel').textContent='设置访问密码（至少 4 位）';
+  $('#lockPwd').placeholder='输入新密码';
+  $('#lockConfirmWrap').style.display='block';
+  $('#lockBtn').textContent='创建并进入';
+  $('#lockForgot').style.display='none';
+  $('#lockPwd').focus();
+}
+function showLockLogin(){
+  $('#lockLabel').textContent='访问密码';
+  $('#lockPwd').placeholder='输入密码解锁';
+  $('#lockConfirmWrap').style.display='none';
+  $('#lockBtn').textContent='解 锁';
+  $('#lockForgot').style.display=auth?'block':'none';
+  $('#lockPwd').focus();
+}
+$('#lockBtn').onclick=()=>{
+  const p1=$('#lockPwd').value;
+  if(!auth){
+    if(p1.length<4){$('#lockMsg').textContent='密码至少 4 位';$('#lockMsg').className='lock-msg err';return;}
+    if(p1!==$('#lockPwd2').value){$('#lockMsg').textContent='两次输入不一致';$('#lockMsg').className='lock-msg err';return;}
+    const salt=uid();
+    auth={salt:salt,hash:sha256(salt+':'+p1)};
+    localStorage.setItem(LS_AUTH,JSON.stringify(auth));
+    $('#lockMsg').textContent='密码已创建';$('#lockMsg').className='lock-msg ok';
+    setTimeout(unlock,350);
+  }else{
+    if(sha256(auth.salt+':'+p1)===auth.hash)unlock();
+    else{$('#lockMsg').textContent='密码错误';$('#lockMsg').className='lock-msg err';$('#lockPwd').select();}
+  }
+};
+$('#lockPwd').addEventListener('keydown',e=>{if(e.key==='Enter')$('#lockBtn').click();});
+$('#lockPwd2').addEventListener('keydown',e=>{if(e.key==='Enter')$('#lockBtn').click();});
+$('#lockForgot').onclick=()=>{
+  confirmModal('忘记密码','本地密码无法找回。可选择<b>清空密码与全部数据</b>后重新开始（等同于重置系统）。',()=>{
+    localStorage.removeItem(LS_AUTH);localStorage.removeItem(LS_DATA);localStorage.removeItem(LS_CFG);
+    cards=[];auth=null;cfg={autoLock:5};$('#autoLockSel').value='5';
+    closeModal();showLockSetup();toast('已重置，请设置新密码','info');
+  });
+  $('#mOk').textContent='清空并重置';$('#mOk').className='btn danger';
+  setTimeout(()=>{$('#mOk').className='btn primary';},500);
+};
+
+/* ================= 启动 ================= */
+loadAll();
+$('#autoLockSel').value=String(cfg.autoLock);
+updateStoreInfo();
+refreshPreview();
+if(auth)showLockLogin();else showLockSetup();
+
+/* 测试钩子：供自动化截图注入演示数据（不影响正常使用） */
+window.__vault={
+  seed(){
+    const now=Date.now();
+    const demo=[
+      {note:'淘宝店·订单#20261001',days:30},
+      {note:'抖音直播间客户',days:null,expire:now+3*DAY},
+      {note:'批发商·王总（永久）',days:null},
+      {note:'亚马逊买家·Mike',days:7},
+      {note:'样品试用（已撤回）',revoked:true,days:null},
+      {note:'老客户续费',days:365},
+      {note:'小红书引流·待激活',days:60},
+      {note:'Temu店铺授权',days:14}
+    ];
+    const prefix='TOYKA';
+    const made=demo.map((d,i)=>({
+      id:uid(),key:genKey(prefix,3,4),note:d.note,revoked:!!d.revoked,
+      createdAt:now-(8-i)*DAY-Math.floor(Math.random()*DAY),
+      expiresAt:d.expire||null,durationDays:d.days,
+      usedAt:(i===1||i===3)?now-Math.floor(Math.random()*2*DAY):null
+    }));
+    const base=[...cards];
+    const seen=new Set(base.map(c=>c.key));
+    made.forEach(m=>{while(seen.has(m.key))m.key=genKey(prefix,3,4);seen.add(m.key);});
+    cards=base.concat(made);saveCards();
+    /* 补一批历史数据让图表有内容 */
+    for(let d=13;d>=0;d--){
+      const n=Math.floor(Math.random()*3);
+      for(let i=0;i<n;i++){
+        const k=genKey(prefix,3,4);if(seen.has(k))continue;seen.add(k);
+        cards.push({id:uid(),key:k,note:'历史批次',revoked:Math.random()<.08,createdAt:now-d*DAY,expiresAt:null,durationDays:Math.random()<.5?30:null,usedAt:Math.random()<.4?now-(d-1)*DAY:null});
+      }
+    }
+    saveCards();
+    return cards.length;
+  },
+  unlock(){localStorage.setItem(LS_AUTH,JSON.stringify({salt:'demo',hash:sha256('demo:demo')}));unlock();}
+};
+</script>
+</body>
+</html>
